@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Poppy Horror Levels</title>
+  <style>
+    html, body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+    canvas {
+      display: block;
+      background-size: cover;
+    }
+    #restartBtn, #mobileControls {
+      position: absolute;
+      z-index: 100;
+    }
+    #restartBtn {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 24px;
+      padding: 15px 30px;
+      background-color: darkred;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      display: none;
+      box-shadow: 0 0 20px red;
+      cursor: pointer;
+    }
+    #mobileControls {
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+    }
+    .btn {
+      width: 60px;
+      height: 60px;
+      font-size: 28px;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 2px solid white;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<button id="restartBtn">🔁 Переродитися</button>
+<div id="mobileControls">
+  <button class="btn" ontouchstart="keys['w']=true" ontouchend="keys['w']=false">⬆️</button>
+  <button class="btn" ontouchstart="keys['a']=true" ontouchend="keys['a']=false">⬅️</button>
+  <button class="btn" ontouchstart="keys['s']=true" ontouchend="keys['s']=false">⬇️</button>
+  <button class="btn" ontouchstart="keys['d']=true" ontouchend="keys['d']=false">➡️</button>
+</div>
+
+<!-- Звуки -->
+<audio id="bgSound" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" autoplay loop></audio>
+<audio id="pickup" src="https://freesound.org/data/previews/256/256113_3263906-lq.mp3"></audio>
+<audio id="lose" src="https://freesound.org/data/previews/415/415209_5121236-lq.mp3"></audio>
+<audio id="win" src="https://freesound.org/data/previews/456/456119_6142144-lq.mp3"></audio>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const restartBtn = document.getElementById("restartBtn");
+const pickupSound = document.getElementById("pickup");
+const loseSound = document.getElementById("lose");
+const winSound = document.getElementById("win");
+
+let keys = {};
+let player, enemies, key, level, gameOver, keyFound, lives, timer, bgImages;
+
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+restartBtn.onclick = () => startGame();
+
+function startGame() {
+  level = 1;
+  lives = 3;
+  timer = 60;
+  bgImages = [
+    'https://i.imgur.com/pdQwT1z.jpeg',
+    'https://i.imgur.com/l1TDEhK.jpeg',
+    'https://i.imgur.com/M6iT1Uq.jpeg'
+  ];
+  gameOver = false;
+  restartBtn.style.display = "none";
+  startLevel();
+  setInterval(() => {
+    if (!gameOver && timer > 0) timer--;
+    if (timer <= 0 && !gameOver) {
+      lives--;
+      if (lives <= 0) return endGame("⏳ Час вийшов! Тебе спіймали!");
+      timer = 60;
+      startLevel();
+    }
+  }, 1000);
+}
+
+function startLevel() {
+  document.body.style.backgroundImage = `url('${bgImages[level - 1]}')`;
+
+  player = { x: 50, y: 50, size: 40, color: "lime", speed: 3 - (level - 1) * 0.5 };
+  enemies = [];
+  key = { x: 200 + level * 100, y: 150, size: 30 };
+  keyFound = false;
+
+  for (let i = 0; i < level; i++) {
+    enemies.push({
+      x: 600 - i * 50,
+      y: 300 + i * 50,
+      size: 50,
+      color: "red",
+      speed: 2 + i * 0.5
+    });
+  }
+}
+
+function drawRect(obj, color) {
+  ctx.fillStyle = color || obj.color;
+  ctx.fillRect(obj.x, obj.y, obj.size, obj.size);
+}
+
+function isCollide(a, b) {
+  return a.x < b.x + b.size &&
+         a.x + a.size > b.x &&
+         a.y < b.y + b.size &&
+         a.y + a.size > b.y;
+}
+
+function update() {
+  if (gameOver) return;
+
+  if (keys["ArrowUp"] || keys["w"]) player.y -= player.speed;
+  if (keys["ArrowDown"] || keys["s"]) player.y += player.speed;
+  if (keys["ArrowLeft"] || keys["a"]) player.x -= player.speed;
+  if (keys["ArrowRight"] || keys["d"]) player.x += player.speed;
+
+  for (let enemy of enemies) {
+    if (enemy.x < player.x) enemy.x += enemy.speed;
+    if (enemy.x > player.x) enemy.x -= enemy.speed;
+    if (enemy.y < player.y) enemy.y += enemy.speed;
+    if (enemy.y > player.y) enemy.y -= enemy.speed;
+
+    if (isCollide(player, enemy)) {
+      loseSound.play();
+      lives--;
+      if (lives <= 0) return endGame("💀 Тебе спіймали!");
+      startLevel();
+      return;
+    }
+  }
+
+  if (!keyFound && isCollide(player, key)) {
+    pickupSound.play();
+    keyFound = true;
+  }
+
+  if (keyFound && player.x > 760 && player.y > 560) {
+    if (level >= 3) {
+      winSound.play();
+      return endGame("🏆 Ти пройшов усі рівні!");
+    }
+    level++;
+    timer = 60;
+    startLevel();
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawRect(player);
+  for (let enemy of enemies) drawRect(enemy);
+  if (!keyFound) drawRect(key, "yellow");
+
+  ctx.fillStyle = "white";
+  ctx.font = "18px Arial";
+  ctx.fillText(`❤️ Життя: ${lives}`, 10, 20);
+  ctx.fillText(`⏳ Час: ${timer}`, 10, 40);
+  ctx.fillText(`🗝️ Рівень: ${level}`, 10, 60);
+
+  if (!keyFound) ctx.fillText("🔑 Знайди ключ!", 10, 590);
+  else ctx.fillText("🚪 Іди в нижній правий кут!", 10, 590);
+}
+
+function endGame(msg) {
+  gameOver = true;
+  setTimeout(() => alert(msg), 100);
+  restartBtn.style.display = "block";
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+startGame();
+gameLoop();
+</script>
+</body>
+</html>
